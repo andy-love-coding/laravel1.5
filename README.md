@@ -36,3 +36,26 @@
       $user->save()
       $user->update(['name'=>'Andy'])
       ```
+
+## 6 用户注册
+  - 显示用户信息 show
+    - 路由（resource）
+      ```
+      Route::get('signup', 'UsersController@create')->name('signup');
+      Route::resource('users', 'UsersController'); // resource路由相当于以下7个路由
+      // Route::get('/users', 'UsersController@index')->name('users.index');
+      // Route::get('/users/create', 'UsersController@create')->name('users.create');
+      // Route::get('/users/{user}', 'UsersController@show')->name('users.show');
+      // Route::post('/users', 'UsersController@store')->name('users.store');
+      // Route::get('/users/{user}/edit', 'UsersController@edit')->name('users.edit');
+      // Route::patch('/users/{user}', 'UsersController@update')->name('users.update');
+      // Route::delete('/users/{user}', 'UsersController@destroy')->name('users.destroy');
+      ```
+    - 在 app/Models/User.php 模型中定义一个「返回头像」的方法
+      ```
+      public function gravatar($size = '100')
+      {
+          $hash = md5(strtolower(trim($this->attributes['email'])));
+          return "http://www.gravatar.com/avatar/$hash?s=$size";
+      }
+      ```

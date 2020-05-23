@@ -135,5 +135,51 @@
           @endif
         @endforeach
         ```
+  - 6.7 用 帮助函数 配置多个数据库（PostgreSQL）
+    - 新建帮助文件：app/helpers.php
+      ```
+      <?php
 
-      
+      function get_db_config()
+      {
+          if (getenv('IS_IN_HEROKU')) {
+              $url = parse_url(getenv("DATABASE_URL"));
+
+              return $db_config = [
+                  'connection' => 'pgsql',
+                  'host' => $url["host"],
+                  'database'  => substr($url["path"], 1),
+                  'username'  => $url["user"],
+                  'password'  => $url["pass"],
+              ];
+          } else {
+              return $db_config = [
+                  'connection' => env('DB_CONNECTION', 'mysql'),
+                  'host' => env('DB_HOST', 'localhost'),
+                  'database'  => env('DB_DATABASE', 'forge'),
+                  'username'  => env('DB_USERNAME', 'forge'),
+                  'password'  => env('DB_PASSWORD', ''),
+              ];
+          }
+      }
+      ```
+    - 自动加载帮助文件：在 composer.json 中的 autoload 中加入："files": ["app/helper.php"]
+      ```      
+      "autoload": {
+          "psr-4": {
+              "App\\": "app/"
+          },
+          "classmap": [
+              "database/seeds",
+              "database/factories"
+          ],
+          "files": [
+              "app/helpers.php"
+          ]
+      }
+      ```
+    - 运行以下命令进行重新加载文件即可
+      ```
+      composer dump-autoload
+      ```
+    - 修改 config/database.php 配置，达到「根据不同的环境，使用不同的数据库」的目的

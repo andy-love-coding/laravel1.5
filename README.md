@@ -62,3 +62,78 @@
   - 6.3 注册表单
     - resources/views/users/create.blade.php
       - <input type="text" name="name" class="form-control" value="{{ old('name') }}">
+  - 6.4 用户数据验证
+    - [数据验证](https://learnku.com/docs/laravel/6.x/validation/5144)
+      ```
+      $this->validate($request,[
+            'name' => 'required|unique:users|max:50',
+            'email' =>'required|email|unique:users|max:255',
+            'password' => 'required|confirmed|min:6'
+        ], [
+            'name.required' => '名字都不写，想上天吗？'
+        ]);
+      ```
+    - csrf 跨站请求伪造：在 resources/views/users/create.blade.php 表单中加入 {{ csrf_field() }}
+      ```
+      <form method="POST" action="{{ route('users.store') }}">
+        {{ csrf_field() }}
+        <!-- <input type="hidden" name="_token" value="fhcxqT67dNowMoWsAHGGPJOAWJn8x5R5ctSwZrAq"> -->
+      </form>
+  - 6.5 注册失败，显示中文错误消息
+    - 错误消息：resources/views/shared/_errors.blade.php
+      ```
+      @if (count($errors) > 0)
+        <div class="alert alert-danger">
+            <ul>
+                @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+      @endif
+      ```
+    - 添加语言包
+      - 安装语言包
+        ```
+        composer require "overtrue/laravel-lang:~3.0"
+        ```
+      - 在 config/app.php 中将：
+        ```
+        Illuminate\Translation\TranslationServiceProvider::class,
+        ```
+        替换为：
+        ```
+        Overtrue\LaravelLang\TranslationServiceProvider::class,
+        ```
+      - 在 config/app.php 中，将项目语言设置为中文
+        ```
+        'locale' => 'zh-CN',
+        ```
+  - 6.6 注册成功
+    - 保存用户并重定向
+      - app/Http/Controllers/UsersController.php
+        ```
+        $user = User::create([
+              'name' => $request->name,
+              'email' => $request->email,
+              'password' => bcrypt($request->password),
+          ]);
+
+          session()->flash('success', '欢迎，您将在这里开启一段新的旅程~');
+          return redirect()->route('users.show', [$user]);
+        ```
+    - 全局消息提示
+      - resources/views/shared/_messages.blade.php
+        ```
+        @foreach (['danger', 'warning', 'success', 'info'] as $msg)
+          @if(session()->has($msg))
+            <div class="flash-message">
+              <p class="alert alert-{{ $msg }}">
+                {{ session()->get($msg) }}
+              </p>
+            </div>
+          @endif
+        @endforeach
+        ```
+
+      

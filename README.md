@@ -14,3 +14,5 @@
 
 - 静态文件浏览器缓存问题
   - webpack.mis.js 中加入`.version()`，然后 default.blade.php 引用css和js时用`mix()`函数
+
+## 

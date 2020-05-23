@@ -38,7 +38,7 @@
       ```
 
 ## 6 用户注册
-  - 显示用户信息 show
+  - 6.2 显示用户信息 show
     - 路由（resource）
       ```
       Route::get('signup', 'UsersController@create')->name('signup');
@@ -59,3 +59,6 @@
           return "http://www.gravatar.com/avatar/$hash?s=$size";
       }
       ```
+  - 6.3 注册表单
+    - resources/views/users/create.blade.php
+      - <input type="text" name="name" class="form-control" value="{{ old('name') }}">

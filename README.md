@@ -15,4 +15,24 @@
 - 静态文件浏览器缓存问题
   - webpack.mis.js 中加入`.version()`，然后 default.blade.php 引用css和js时用`mix()`函数
 
-## 
+## 5 用户模型
+  - Move user models to models folder
+    - 记得搜索更新 `App\User` > `App\Models\User`
+    - 记得更改 app/Models/User.php 中的命名空间 `namespace App;` > `namespace App\Models;`
+  - 执行迁移文件
+    - 记得在 .env 文件中填写数据库账号密码
+    - 执行迁移
+      ```
+      php artisan migrate
+      ```
+    - 用 tinker 测试数据库
+      ```
+      use App\Models\User
+      User::create([])
+      User::find(1)
+      User::findOrFail(5)
+      $user = User::first()
+      $user->name = 'Mokey'
+      $user->save()
+      $user->update(['name'=>'Andy'])
+      ```

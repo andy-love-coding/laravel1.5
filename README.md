@@ -294,48 +294,68 @@
       - 在 Laravel 的默认配置中，如果用户登录后没有使用『记住我』功能，则登录状态默认只会被记住两个小时。如果使用了『记住我』功能，则登录状态会被延长到五年。
 
 ## 8 用户CRUD
-  - 8.2 更新用户 PATCH
-    - 相关路由
+### 8.2 更新用户 PATCH
+  - 相关路由
+    ```
+    Route::get('/users/{user}/edit', 'UsersController@edit')->name('users.edit');
+    Route::patch('/users/{user}', 'UsersController@update')->name('users.update');
+    ```
+  - 视图 resources/views/users/edit.blade.php
+    ```
+    <form method="POST" action="{{ route('users.update', $user->id )}}">
+      {{ method_field('PATCH') }}
+      {{ csrf_field() }}
+      ...
+      <button type="submit" class="btn btn-primary">更新</button>
+    </form>
+    ```
+  - form表单PATCH更新请求
+    ```
+    {{ method_field('PATCH') }} 等于 <input type="hidden" name="_method" value="PATCH">，由于浏览器不支持发送 PATCH 动作，因此我们需要在表单中添加一个隐藏域来伪造 PATCH 请求。
+    ```
+  - 更新用户 app/Http/Controllers/UsersController.php
+    ```
+    public function update(User $user, Request $request)
+    {
+        $this->validate($request, [
+            'name' => 'required|max:50',
+            'password' => 'nullable|confirmed|min:6'
+        ]);
+
+        $data = [];
+        $data['name'] = $request->name;
+        if ($request->password) {
+            $data['password'] = bcrypt($request->password);
+        }
+        $user->update($data);
+
+        session()->flash('success', '个人资料更新成功！');
+
+        return redirect()->route('users.show', $user);
+    }
+    ```
+### 8.3 权限系统
+  - 必须先登录：app/Http/Controllers/UsersController.php
+    ```
+    public function __construct()
+    {
+        // except 黑名单排除不需要登录的，其余都需要登录
+        $this->middleware('auth', [
+            'except' => ['show', 'create', 'store']
+        ]);
+    }
+    ```
+  - 必须为游客：「登录」、「注册」必须为访客。
+    - 「登录」时必须是游客 app/Http/Controllers/SessionsController.php
       ```
-      Route::get('/users/{user}/edit', 'UsersController@edit')->name('users.edit');
-      Route::patch('/users/{user}', 'UsersController@update')->name('users.update');
-      ```
-    - 视图 resources/views/users/edit.blade.php
-      ```
-      <form method="POST" action="{{ route('users.update', $user->id )}}">
-        {{ method_field('PATCH') }}
-        {{ csrf_field() }}
-        ...
-        <button type="submit" class="btn btn-primary">更新</button>
-      </form>
-      ```
-    - form表单PATCH更新请求
-      ```
-      {{ method_field('PATCH') }} 等于 <input type="hidden" name="_method" value="PATCH">，由于浏览器不支持发送 PATCH 动作，因此我们需要在表单中添加一个隐藏域来伪造 PATCH 请求。
-      ```
-    - 更新用户 app/Http/Controllers/UsersController.php
-      ```
-      public function update(User $user, Request $request)
+      public function __construct()
       {
-          $this->validate($request, [
-              'name' => 'required|max:50',
-              'password' => 'nullable|confirmed|min:6'
+          $this->middleware('guest', [
+              'only' => ['create', 'store']
           ]);
-
-          $data = [];
-          $data['name'] = $request->name;
-          if ($request->password) {
-              $data['password'] = bcrypt($request->password);
-          }
-          $user->update($data);
-
-          session()->flash('success', '个人资料更新成功！');
-
-          return redirect()->route('users.show', $user);
       }
       ```
-  - 8.3 权限系统
-    - 必须先登录：app/Http/Controllers/UsersController.php
+    - 「注册」时必须是游客 app/Http/Controllers/UsersController.php
       ```
       public function __construct()
       {
@@ -343,97 +363,194 @@
           $this->middleware('auth', [
               'except' => ['show', 'create', 'store']
           ]);
-      }
-      ```
-    - 必须为游客：「登录」、「注册」必须为访客。
-      - 「登录」时必须是游客 app/Http/Controllers/SessionsController.php
-        ```
-        public function __construct()
-        {
-            $this->middleware('guest', [
-                'only' => ['create', 'store']
-            ]);
-        }
-        ```
-      - 「注册」时必须是游客 app/Http/Controllers/UsersController.php
-        ```
-        public function __construct()
-        {
-            // except 黑名单排除不需要登录的，其余都需要登录
-            $this->middleware('auth', [
-                'except' => ['show', 'create', 'store']
-            ]);
 
-            // only 白名单设定注册必须为 游客模式（非登录）
-            $this->middleware('guest', [
-                'only' => ['create', 'store']
-            ]);
-        }
-        ```
-      - 记得修改“违反仅限游客操作”的默认跳转：app/Providers/RouteServiceProvider.php
-        ```
-        // public const HOME = '/home';
-        public const HOME = '/'; // 默认跳转由 '/home' 改为 '/'
-        ```
-    - 授权策略：自己才能比较自己
-      - 1.创建授权策略
-        ```
-        php artisan make:policy UserPolicy
-        ```
-        - 编写策略文件
-          ```
-          // update 方法接收两个参数，第一个参数默认为当前登录用户实例，第二个参数则为要进行授权的用户实例
-          // 使用授权策略时，我们 不需要 传递当前登录用户至该方法内，因为框架会自动加载当前登录用户，即不用传递 $currentUser
-          public function update(User $currentUser, User $user)
-          {
-              return $currentUser->id === $user->id;
-          }
-          ```
-      - 2.注册授权策略 (即根据模型找到策略)，在 app/Providers/AuthServiceProvider.php 中加入自动注册逻辑
-        ```
-        // 修改策略自动发现的逻辑
-        Gate::guessPolicyNamesUsing(function ($modelClass) {
-            // 动态返回模型对应的策略名称，如：// 'App\Models\User' => 'App\Policies\UserPolicy',
-            return 'App\Policies\\'.class_basename($modelClass).'Policy';
-        });
-        ```
-      - 3.使用授权策略 app/Http/Controllers/UsersController.php
-        ```
-        public function edit(User $user)
-        {
-            // authorize 方法接收两个参数，第一个为授权策略的名称，第二个为进行授权验证的数据。
-            $this->authorize('update', $user);
-            return view('users.edit', compact('user'));
-        }
-
-        public function update(User $user, Request $request)
-        {
-            $this->authorize('update', $user);
-            ...
-        }
-        ```
-    - 友好转向intended(), 在 app/Http/Controllers/SessionsController.php 中：
-      ```
-      public function store(Request $request)
-      {
-          $credentials = $this->validate($request, [
-              'email' => 'required|email|max:255',
-              'password' => 'required',
+          // only 白名单设定注册必须为 游客模式（非登录）
+          $this->middleware('guest', [
+              'only' => ['create', 'store']
           ]);
+      }
+      ```
+    - 记得修改“违反仅限游客操作”的默认跳转：app/Providers/RouteServiceProvider.php
+      ```
+      // public const HOME = '/home';
+      public const HOME = '/'; // 默认跳转由 '/home' 改为 '/'
+      ```
+  - 授权策略：自己才能比较自己
+    - 1.创建授权策略
+      ```
+      php artisan make:policy UserPolicy
+      ```
+      - 编写策略文件
+        ```
+        // update 方法接收两个参数，第一个参数默认为当前登录用户实例，第二个参数则为要进行授权的用户实例
+        // 使用授权策略时，我们 不需要 传递当前登录用户至该方法内，因为框架会自动加载当前登录用户，即不用传递 $currentUser
+        public function update(User $currentUser, User $user)
+        {
+            return $currentUser->id === $user->id;
+        }
+        ```
+    - 2.注册授权策略 (即根据模型找到策略)，在 app/Providers/AuthServiceProvider.php 中加入自动注册逻辑
+      ```
+      // 修改策略自动发现的逻辑
+      Gate::guessPolicyNamesUsing(function ($modelClass) {
+          // 动态返回模型对应的策略名称，如：// 'App\Models\User' => 'App\Policies\UserPolicy',
+          return 'App\Policies\\'.class_basename($modelClass).'Policy';
+      });
+      ```
+    - 3.使用授权策略 app/Http/Controllers/UsersController.php
+      ```
+      public function edit(User $user)
+      {
+          // authorize 方法接收两个参数，第一个为授权策略的名称，第二个为进行授权验证的数据。
+          $this->authorize('update', $user);
+          return view('users.edit', compact('user'));
+      }
 
-          if (Auth::attempt($credentials, $request->has('remember'))) {
-              // 登录成功
-              session()->flash('success', '欢迎回来！');
+      public function update(User $user, Request $request)
+      {
+          $this->authorize('update', $user);
+          ...
+      }
+      ```
+  - 友好转向intended(), 在 app/Http/Controllers/SessionsController.php 中：
+    ```
+    public function store(Request $request)
+    {
+        $credentials = $this->validate($request, [
+            'email' => 'required|email|max:255',
+            'password' => 'required',
+        ]);
 
-              // 登录后友好转向 intended() 
-              // 重定向到上一次请求尝试访问的页面上，并接收一个默认跳转地址参数，当上一次请求记录为空时，跳转到默认地址上。
-              $default = route('users.show', Auth::user());
-              return redirect()->intended($default);
-          } else {
-              // 登录失败
-              session()->flash('danger', '很抱歉，您的邮箱和密码不匹配');
-              // 使用 withInput() 后模板里 old('email') 将能获取到上一次用户提交的内容
-              return redirect()->back()->withInput();
+        if (Auth::attempt($credentials, $request->has('remember'))) {
+            // 登录成功
+            session()->flash('success', '欢迎回来！');
+
+            // 登录后友好转向 intended() 
+            // 重定向到上一次请求尝试访问的页面上，并接收一个默认跳转地址参数，当上一次请求记录为空时，跳转到默认地址上。
+            $default = route('users.show', Auth::user());
+            return redirect()->intended($default);
+        } else {
+            // 登录失败
+            session()->flash('danger', '很抱歉，您的邮箱和密码不匹配');
+            // 使用 withInput() 后模板里 old('email') 将能获取到上一次用户提交的内容
+            return redirect()->back()->withInput();
+        }
+    }
+    ```
+### 8.4 列出所有用户
+  - 控制器 app/Http/Controllers/UsersController.php
+    ```
+    public function index()
+    {
+        $users = User::paginate(10); // 分页，每页10条
+        return view('users.index', compact('users'));
+    }
+    ```
+  - 列表视图 resources/views/users/index.blade.php
+    ```
+    @extends('layouts.default')
+    @section('title', '所有用户')
+
+    @section('content')
+    <div class="offset-md-2 col-md-8">
+      <h2 class="mb-4 text-center">所有用户</h2>
+      <div class="list-group list-group-flush">
+        @foreach ($users as $user)
+          @include('users._user')
+        @endforeach
+      </div>
+
+      <div class="mt-3">
+        {!! $users->render() !!}
+      </div>
+    </div>
+    @stop
+    ```
+  - 局部视图 resources/views/users/_user.blade.php
+    ```
+    <div class="list-group-item">
+      <img class="mr-3" src="{{ $user->gravatar() }}" alt="{{ $user->name }}" width=32>
+      <a href="{{ route('users.show', $user) }}">
+        {{ $user->name }}
+      </a>
+    </div>
+    ```
+  - 分页
+    渲染分页视图的代码必须使用 {!! !!} 语法，而不是 {{　}}，这样生成 HTML 链接才不会被转义.
+    ```
+    控制器中：
+      $users = User::paginate(10); // 分页，每页10条
+      return view('users.index', compact('users'));
+    视图中：
+      <div class="mt-3">
+        {!! $users->render() !!}
+      </div>
+    ```
+  - 填充假数据 (5步骤)
+    - 1.模型工厂
+      database/factories/UserFactory.php
+      ```
+      <?php
+
+      use App\Models\User;
+      use Illuminate\Support\Str;
+      use Faker\Generator as Faker;
+
+      $factory->define(User::class, function (Faker $faker) {
+          $date_time = $faker->date . ' ' . $faker->time;
+          return [
+              'name' => $faker->name,
+              'email' => $faker->unique()->safeEmail,
+              'email_verified_at' => now(),
+              'password' => '$2y$10$TKh8H1.PfQx37YgCzwiKb.KjNyWgaHb9cbcoQgdIVFlYg7B77UdFm', // secret
+              'remember_token' => Str::random(10),
+              'created_at' => $date_time,
+              'updated_at' => $date_time,
+          ];
+      });
+      ```
+      define 定义了一个指定数据模型（如此例子 User）的模型工厂
+    - 2.创建填充文件
+      ```
+      php artisan make:seeder UsersTableSeeder
+      ```
+    - 3.编写填充文件（在seeder文件中用`factory()`调用模型工厂）
+      ```
+      <?php
+
+      use Illuminate\Database\Seeder;
+      use App\Models\User;
+
+      class UsersTableSeeder extends Seeder
+      {
+          public function run()
+          {
+              $users = factory(User::class)->times(50)->make();
+              User::insert($users->makeVisible(['password', 'remember_token'])->toArray());
+
+              $user = User::find(1);
+              $user->name = 'Summer';
+              $user->email = 'summer@example.com';
+              $user->save();
           }
       }
+      ```
+      makeVisible 方法临时显示 User 模型里指定的隐藏属性
+    - 4.在 database/seeds/DatabaseSeeder.php 中调用填充文件
+      ```
+      public function run()
+      {
+          $this->call(UsersTableSeeder::class);
+      }
+      ```
+    - 5.执行填充命令
+      ```
+      php artisan migrate:refresh
+      php artisan db:seed
+
+      或者
+      php artisan migrate:refresh --seed // 这一句相当于上面的2句
+      
+      单独指定填充文件
+      php artisan db:seed --class=UsersTableSeeder        
       ```

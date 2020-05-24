@@ -12,13 +12,19 @@ class UsersController extends Controller
     {
         // except 黑名单排除不需要登录的，其余都需要登录
         $this->middleware('auth', [
-            'except' => ['show', 'create', 'store']
+            'except' => ['show', 'create', 'store', 'index']
         ]);
 
         // only 白名单设定注册必须为 游客模式（非登录）
         $this->middleware('guest', [
             'only' => ['create', 'store']
         ]);
+    }
+
+    public function index()
+    {
+        $users = User::paginate(10); // 分页，每页10条
+        return view('users.index', compact('users'));
     }
 
     public function create()

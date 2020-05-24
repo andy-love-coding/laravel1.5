@@ -183,3 +183,78 @@
       composer dump-autoload
       ```
     - 修改 config/database.php 配置，达到「根据不同的环境，使用不同的数据库」的目的
+
+## 7 会话管理
+  - 7.2 创建会话（登录）
+    - 创建会话控制器 php artisan make:controller SessionsController
+    - 会话路由
+      ```
+      Route::get('login', 'SessionsController@create')->name('login');
+      Route::post('login', 'SessionsController@store')->name('login');
+      Route::delete('logout', 'SessionsController@destroy')->name('logout');
+      ```
+    - 创建登录视图 resources/views/sessions/create.blade.php
+    - 创建登录会话 app/Http/Controllers/SessionsController.php
+      ```
+      public function store(Request $request)
+      {
+        $credentials = $this->validate($request, [
+            'email' => 'required|email|max:255',
+            'password' => 'required'
+        ]);
+
+        if (Auth::attempt($credentials)) {
+            session()->flash('success', '欢迎回来！');
+            return redirect()->route('users.show', [Auth::user()]);
+        } else {
+            session()->flash('danger', '很抱歉，您的邮箱和密码不匹配');
+            // 使用 withInput() 后模板里 old('email') 将能获取到上一次用户提交的内容
+            return redirect()->back()->withInput();
+        }
+      }
+      ```
+
+  - 7.3 用户登录
+    - 下拉菜单 resources/views/layouts/_header.blade.php
+      ```
+      <ul class="navbar-nav justify-content-end">
+      @if (Auth::check())
+        <li class="nav-item"><a class="nav-link" href="#">用户列表</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            {{ Auth::user()->name }}
+          </a>
+          <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+            <a class="dropdown-item" href="{{ route('users.show', Auth::user()) }}">个人中心</a>
+            <a class="dropdown-item" href="#">编辑资料</a>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" id="logout" href="#">
+              <form action="{{ route('logout') }}" method="POST">
+                {{ csrf_field() }}
+                {{ method_field('DELETE') }}
+                <button class="btn btn-block btn-danger" type="submit" name="button">退出</button>
+              </form>
+            </a>
+          </div>
+        </li>
+      @else
+        <li class="nav-item"><a class="nav-link" href="{{ route('help') }}">帮助</a></li>
+        <li class="nav-item" ><a class="nav-link" href="{{ route('login') }}">登录</a></li>
+      @endif
+      ```
+    - form表单DELETE请求
+      ```
+      注意：{{ method_field('DELETE') }} 等于 <input type="hidden" name="_method" value="DELETE"> 这是由于浏览器不支持发送 DELETE 请求，因此我们需要使用一个隐藏域来伪造 DELETE 请求。
+      ```
+    - 集成 Bootstrap 的 JavaScript 库，在 resources/views/layouts/default.blade.php 中：
+      ```
+        <script src="{{ mix('js/app.js') }}"></script>
+      </body>
+      ```
+      只有加载了 Bootstrap 的 js 库，下拉菜单「点击」才能正常工作
+    - 注册后自动登录，在 app/Http/Controllers/UsersController.php 中：
+      ```
+      Auth::login($user);
+      session()->flash('success', '欢迎，您将在这里开启一段新的旅程~');
+      return redirect()->route('users.show', [$user]);
+      ```

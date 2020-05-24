@@ -61,7 +61,9 @@
       ```
   - 6.3 注册表单
     - resources/views/users/create.blade.php
-      - <input type="text" name="name" class="form-control" value="{{ old('name') }}">
+      ```
+      <input type="text" name="name" class="form-control" value="{{ old('name') }}">
+      ```
   - 6.4 用户数据验证
     - [数据验证](https://learnku.com/docs/laravel/6.x/validation/5144)
       ```
@@ -258,3 +260,35 @@
       session()->flash('success', '欢迎，您将在这里开启一段新的旅程~');
       return redirect()->route('users.show', [$user]);
       ```
+  - 7.4 退出
+    - app/Http/Controllers/SessionsController.php
+      ```
+      public function destroy()
+      {
+          Auth::logout();
+          session()->flash('success', '您已成功退出！');
+          return redirect('login');
+      }
+      ```
+  - 7.5 记住我
+    - 登录页面 resources/views/sessions/create.blade.php
+      ```
+      <div class="form-group">
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" name="remember" id="exampleCheck1">
+          <label class="form-check-label" for="exampleCheck1">记住我</label>
+        </div>
+      </div>
+      ```
+    - app/Http/Controllers/SessionsController.php
+      ```
+      if (Auth::attempt($credentials, $request->has('remember'))) {
+           session()->flash('success', '欢迎回来！');
+           return redirect()->route('users.show', [Auth::user()]);
+       } else {
+           session()->flash('danger', '很抱歉，您的邮箱和密码不匹配');
+           return redirect()->back()->withInput();
+       }
+       ```
+      - Auth::attempt() 方法可接收两个参数，第一个参数为需要进行用户身份认证的数组，第二个参数为是否为用户开启『记住我』功能的布尔值
+      - 在 Laravel 的默认配置中，如果用户登录后没有使用『记住我』功能，则登录状态默认只会被记住两个小时。如果使用了『记住我』功能，则登录状态会被延长到五年。

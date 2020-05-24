@@ -27,6 +27,9 @@
       ```
     - 用 tinker 测试数据库
       ```
+      php artisan tinker
+      ```
+      ```
       use App\Models\User
       User::create([])
       User::find(1)
@@ -553,4 +556,80 @@
       
       单独指定填充文件
       php artisan db:seed --class=UsersTableSeeder        
+      ```
+### 8.5 删除用户
+  - 添加字段 (管理员字段：is_admin）
+    - 1.生成迁移文件，用来添加字段
+      ```
+      php artisan make:migration add_is_admin_to_users_table --table=users
+      ```
+    - 2.编写迁移文件
+      ```
+      public function up()
+      {
+          // 增加 is_admin 字段
+          Schema::table('users', function (Blueprint $table) {
+              $table->boolean('is_admin')->after('password')->default(false);
+          });
+      }
+
+      public function down()
+      {
+          // 删除 is_admin 字段
+          Schema::table('users', function (Blueprint $table) {
+              $table->dropColumn('is_admin');
+          });
+      }
+      ```
+    - 3.执行迁移文件 (记得要执行完了新迁移文件后，才能全部回滚 refresh)
+      ```
+      php artisan migrate
+      ```
+    - 4.将第一个用户设置为管理员 database/seeds/UsersTableSeeder.php
+      ```
+      public function run()
+      {
+          $users = factory(User::class)->times(50)->make();
+          User::insert($users->makeVisible(['password', 'remember_token'])->toArray());
+
+          $user = User::find(1);
+          $user->name = 'Summer';
+          $user->email = 'summer@example.com';
+          $user->is_admin = true;
+          $user->save();
+      }
+      ```
+    - 5.重置数据库 并填充
+      ```
+      php artisan migrate:refresh --seed
+      ```
+  - destroy 删除动作
+    - 1.定义「删除」授权策略 app/Policies/UserPolicy.php
+      ```
+      public function destroy(User $currentUser, User $user)
+      {
+          // 管理员才能删除 且 自己不能删除自己
+          return $currentUser->is_admin && $currentUser->id !== $user->id;
+      }
+      ```
+    - 2.模板中用 `@can 和 @endcan`调用「删除策略」：resources/views/users/_user.blade.php
+
+      ```
+      @can('destroy', $user)
+        <form action="{{ route('users.destroy', $user) }}" method="post" class="float-right" onsubmit="return confirm('确定要删除该用户吗？')">
+          {{ csrf_field() }}
+          {{ method_field('DELETE') }}
+          <button type="submit" class="btn btn-sm btn-danger delete-btn">删除</button>
+        </form>
+      @endcan
+      ```
+    - 3.控制器中用 `authorize()` 调用「删除策略」，并执行删除动作：app/Http/Controllers/UsersController.php
+      ```
+      public function destroy(User $user)
+      {
+          $this->authorize('destroy', $user);
+          $user->delete();
+          session()->flash('success', '成功删除用户！');
+          return back();
+      }
       ```

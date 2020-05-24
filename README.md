@@ -334,3 +334,106 @@
           return redirect()->route('users.show', $user);
       }
       ```
+  - 8.3 权限系统
+    - 必须先登录：app/Http/Controllers/UsersController.php
+      ```
+      public function __construct()
+      {
+          // except 黑名单排除不需要登录的，其余都需要登录
+          $this->middleware('auth', [
+              'except' => ['show', 'create', 'store']
+          ]);
+      }
+      ```
+    - 必须为游客：「登录」、「注册」必须为访客。
+      - 「登录」时必须是游客 app/Http/Controllers/SessionsController.php
+        ```
+        public function __construct()
+        {
+            $this->middleware('guest', [
+                'only' => ['create', 'store']
+            ]);
+        }
+        ```
+      - 「注册」时必须是游客 app/Http/Controllers/UsersController.php
+        ```
+        public function __construct()
+        {
+            // except 黑名单排除不需要登录的，其余都需要登录
+            $this->middleware('auth', [
+                'except' => ['show', 'create', 'store']
+            ]);
+
+            // only 白名单设定注册必须为 游客模式（非登录）
+            $this->middleware('guest', [
+                'only' => ['create', 'store']
+            ]);
+        }
+        ```
+      - 记得修改“违反仅限游客操作”的默认跳转：app/Providers/RouteServiceProvider.php
+        ```
+        // public const HOME = '/home';
+        public const HOME = '/'; // 默认跳转由 '/home' 改为 '/'
+        ```
+    - 授权策略：自己才能比较自己
+      - 1.创建授权策略
+        ```
+        php artisan make:policy UserPolicy
+        ```
+        - 编写策略文件
+          ```
+          // update 方法接收两个参数，第一个参数默认为当前登录用户实例，第二个参数则为要进行授权的用户实例
+          // 使用授权策略时，我们 不需要 传递当前登录用户至该方法内，因为框架会自动加载当前登录用户，即不用传递 $currentUser
+          public function update(User $currentUser, User $user)
+          {
+              return $currentUser->id === $user->id;
+          }
+          ```
+      - 2.注册授权策略 (即根据模型找到策略)，在 app/Providers/AuthServiceProvider.php 中加入自动注册逻辑
+        ```
+        // 修改策略自动发现的逻辑
+        Gate::guessPolicyNamesUsing(function ($modelClass) {
+            // 动态返回模型对应的策略名称，如：// 'App\Models\User' => 'App\Policies\UserPolicy',
+            return 'App\Policies\\'.class_basename($modelClass).'Policy';
+        });
+        ```
+      - 3.使用授权策略 app/Http/Controllers/UsersController.php
+        ```
+        public function edit(User $user)
+        {
+            // authorize 方法接收两个参数，第一个为授权策略的名称，第二个为进行授权验证的数据。
+            $this->authorize('update', $user);
+            return view('users.edit', compact('user'));
+        }
+
+        public function update(User $user, Request $request)
+        {
+            $this->authorize('update', $user);
+            ...
+        }
+        ```
+    - 友好转向intended(), 在 app/Http/Controllers/SessionsController.php 中：
+      ```
+      public function store(Request $request)
+      {
+          $credentials = $this->validate($request, [
+              'email' => 'required|email|max:255',
+              'password' => 'required',
+          ]);
+
+          if (Auth::attempt($credentials, $request->has('remember'))) {
+              // 登录成功
+              session()->flash('success', '欢迎回来！');
+
+              // 登录后友好转向 intended() 
+              // 重定向到上一次请求尝试访问的页面上，并接收一个默认跳转地址参数，当上一次请求记录为空时，跳转到默认地址上。
+              $default = route('users.show', Auth::user());
+              return redirect()->intended($default);
+          } else {
+              // 登录失败
+              session()->flash('danger', '很抱歉，您的邮箱和密码不匹配');
+              // 使用 withInput() 后模板里 old('email') 将能获取到上一次用户提交的内容
+              return redirect()->back()->withInput();
+          }
+      }
+      ```

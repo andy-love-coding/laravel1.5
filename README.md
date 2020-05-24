@@ -292,3 +292,45 @@
        ```
       - Auth::attempt() 方法可接收两个参数，第一个参数为需要进行用户身份认证的数组，第二个参数为是否为用户开启『记住我』功能的布尔值
       - 在 Laravel 的默认配置中，如果用户登录后没有使用『记住我』功能，则登录状态默认只会被记住两个小时。如果使用了『记住我』功能，则登录状态会被延长到五年。
+
+## 8 用户CRUD
+  - 8.2 更新用户 PATCH
+    - 相关路由
+      ```
+      Route::get('/users/{user}/edit', 'UsersController@edit')->name('users.edit');
+      Route::patch('/users/{user}', 'UsersController@update')->name('users.update');
+      ```
+    - 视图 resources/views/users/edit.blade.php
+      ```
+      <form method="POST" action="{{ route('users.update', $user->id )}}">
+        {{ method_field('PATCH') }}
+        {{ csrf_field() }}
+        ...
+        <button type="submit" class="btn btn-primary">更新</button>
+      </form>
+      ```
+    - form表单PATCH更新请求
+      ```
+      {{ method_field('PATCH') }} 等于 <input type="hidden" name="_method" value="PATCH">，由于浏览器不支持发送 PATCH 动作，因此我们需要在表单中添加一个隐藏域来伪造 PATCH 请求。
+      ```
+    - 更新用户 app/Http/Controllers/UsersController.php
+      ```
+      public function update(User $user, Request $request)
+      {
+          $this->validate($request, [
+              'name' => 'required|max:50',
+              'password' => 'nullable|confirmed|min:6'
+          ]);
+
+          $data = [];
+          $data['name'] = $request->name;
+          if ($request->password) {
+              $data['password'] = bcrypt($request->password);
+          }
+          $user->update($data);
+
+          session()->flash('success', '个人资料更新成功！');
+
+          return redirect()->route('users.show', $user);
+      }
+      ```

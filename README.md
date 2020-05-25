@@ -559,11 +559,11 @@
       ```
 ### 8.5 删除用户
   - 添加字段 (管理员字段：is_admin）
-    1. 生成迁移文件，用来添加字段
+    - 1.生成迁移文件，用来添加字段
       ```
       php artisan make:migration add_is_admin_to_users_table --table=users
       ```
-    2. 编写迁移文件
+    - 2.编写迁移文件
       ```
       public function up()
       {
@@ -581,11 +581,11 @@
           });
       }
       ```
-    3. 执行迁移文件 (记得要执行完了新迁移文件后，才能全部回滚 refresh)
+    - 3.执行迁移文件 (记得要执行完了新迁移文件后，才能全部回滚 refresh)
       ```
       php artisan migrate
       ```
-    4. 将第一个用户设置为管理员 database/seeds/UsersTableSeeder.php
+    - 4.将第一个用户设置为管理员 database/seeds/UsersTableSeeder.php
       ```
       public function run()
       {
@@ -599,12 +599,12 @@
           $user->save();
       }
       ```
-    5. 重置数据库 并填充
+    - 5.重置数据库 并填充
       ```
       php artisan migrate:refresh --seed
       ```
   - destroy 删除动作
-    1. 定义「删除」授权策略 app/Policies/UserPolicy.php
+    - 1.定义「删除」授权策略 app/Policies/UserPolicy.php
       ```
       public function destroy(User $currentUser, User $user)
       {
@@ -612,7 +612,7 @@
           return $currentUser->is_admin && $currentUser->id !== $user->id;
       }
       ```
-    2. 模板中用 `@can 和 @endcan`调用「删除策略」：resources/views/users/_user.blade.php
+    - 2.模板中用 `@can 和 @endcan`调用「删除策略」：resources/views/users/_user.blade.php
       ```
       @can('destroy', $user)
         <form action="{{ route('users.destroy', $user) }}" method="post" class="float-right" onsubmit="return confirm('确定要删除该用户吗？')">
@@ -622,7 +622,7 @@
         </form>
       @endcan
       ```
-    3. 控制器中用 `authorize()` 调用「删除策略」，并执行删除动作：app/Http/Controllers/UsersController.php
+    - 3.控制器中用 `authorize()` 调用「删除策略」，并执行删除动作：app/Http/Controllers/UsersController.php
       ```
       public function destroy(User $user)
       {
@@ -635,11 +635,11 @@
 ## 9 邮件发送
 ### 9.2 账户激活
   - 9.2.1 添加字段 (activation_token  activated)
-    1. 生成迁移文件 用来添加2个激活字段
+    - 1.生成迁移文件 用来添加2个激活字段
       ```
       php artisan make:migration add_activation_to_users_table --table=users
       ```
-    2. 编写迁移文件
+    - 2.编写迁移文件
       ```
       public function up()
       {
@@ -657,12 +657,12 @@
           });
       }
       ```
-    3. 执行迁移
+    - 3.执行迁移
       ```
       php artisan migrate
       ```
   - 9.2.2 模型监听 生成激活令牌
-    1. 监听 Model 的 creating 事件，在用户「注册」之前生成用户的激活令牌
+    - 1.监听 Model 的 creating 事件，在用户「注册」之前生成用户的激活令牌
       app/Models/User.php
       ```
       public static function boot()
@@ -674,7 +674,7 @@
           });
       }
       ```
-    2. 在模型工厂中将假用户设为激活 database/factories/UserFactory.php
+    - 2.在模型工厂中将假用户设为激活 database/factories/UserFactory.php
       ```
       $factory->define(User::class, function (Faker $faker) {
           $date_time = $faker->date . ' ' . $faker->time;
@@ -690,20 +690,20 @@
           ];
       });
       ```
-    3. 重置数据库 并填充
+    - 3.重置数据库 并填充
       ```
       php artisan migrate:refresh --seed
       ```
   - 9.2.3 发送邮件
-    1. 在 `.env` 中设置邮件驱动为 log
+    - 1.在 `.env` 中设置邮件驱动为 log
       ```
       MAIL_DRIVER=log
       ```
-    2. 激活路由 (激活链接) routes/web.php
+    - 2.激活路由 (激活链接) routes/web.php
       ```
       Route::get('signup/confirm/{token}', 'UsersController@confirmEmail')->name('confirm_email');
       ```
-    3. 激活邮件视图 resources/views/emails/confirm.blade.php
+    - 3.激活邮件视图 resources/views/emails/confirm.blade.php
       ```
       <!DOCTYPE html>
       <html>
@@ -727,7 +727,7 @@
       </body>
       </html>
       ```
-    4. 登录时检查是否已激活 app/Http/Controllers/SessionsController.php
+    - 4.登录时检查是否已激活 app/Http/Controllers/SessionsController.php
       ```
       if (Auth::attempt($credentials, $request->has('remember'))) {
           // 登录成功
@@ -742,7 +742,7 @@
               // 未激活
               Auth::logout();
               session()->flash('warning', '您的账号未激活，请检查邮箱中的注册邮件进行激活。');
-              return redirect('home');
+              return redirect('/');
           }
       } else {
           // 登录失败
@@ -751,7 +751,7 @@
           return redirect()->back()->withInput();
       }
       ```
-    5. 发送邮件 app/Http/Controllers/UsersController.php
+    - 5.发送邮件 app/Http/Controllers/UsersController.php
       ```
       // 注册
       public function store(Request $request)
@@ -793,3 +793,122 @@
           return redirect()->route('users.show', $user);
       }
       ```
+### 9.3 重置密码
+  - 思路说明：重置密码控制器逻辑框架已经写好，我们只需配置4个路由、2个视图即可。
+  - 1.重置密码路由
+    ```
+    Route::get('password/reset', 'Auth\ForgotPasswordController@showLinkRequestForm')->name('password.request');
+    Route::post('password/email', 'Auth\ForgotPasswordController@sendResetLinkEmail')->name('password.email');
+    Route::get('password/reset/{token}', 'Auth\ResetPasswordController@showResetForm')->name('password.reset');
+    Route::post('password/reset', 'Auth\ResetPasswordController@reset')->name('password.update');
+    ```
+  - 2.发送「重置密码」邮件表单视图 resources/views/auth/passwords/email.blade.php
+    ```
+    @extends('layouts.default')
+    @section('title', '重置密码')
+
+    @section('content')
+    <div class="col-md-8 offset-md-2">
+      <div class="card ">
+        <div class="card-header"><h5>重置密码</h5></div>
+
+        <div class="card-body">
+          @if (session('status'))
+          <div class="alert alert-success">
+            {{ session('status') }}
+          </div>
+          @endif
+
+          <form class="" method="POST" action="{{ route('password.email') }}">
+            {{ csrf_field() }}
+
+            <div class="form-group{{ $errors->has('email') ? ' has-error' : '' }}">
+              <label for="email" class="form-control-label">邮箱地址：</label>
+
+              <input id="email" type="email" class="form-control" name="email" value="{{ old('email') }}" required>
+
+              @if ($errors->has('email'))
+                <span class="form-text">
+                  <strong>{{ $errors->first('email') }}</strong>
+                </span>
+              @endif
+            </div>
+
+            <div class="form-group">
+              <button type="submit" class="btn btn-primary">
+                发送密码重置邮件
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    @endsection
+    ```
+  - 3.重置密码表单视图 resources/views/auth/passwords/reset.blade.php
+    ```
+    @extends('layouts.default')
+    @section('title', '更新密码')
+
+    @section('content')
+    <div class="offset-md-1 col-md-10">
+      <div class="card">
+        <div class="card-header">
+            <h5>更新密码</h5>
+        </div>
+
+        <div class="card-body">
+          <form method="POST" action="{{ route('password.update') }}">
+            @csrf
+
+            <input type="hidden" name="token" value="{{ $token }}">
+
+            <div class="form-group row">
+              <label for="email" class="col-md-4 col-form-label text-md-right">Email 地址</label>
+
+              <div class="col-md-6">
+                <input id="email" type="email" class="form-control{{ $errors->has('email') ? ' is-invalid' : '' }}" name="email" value="{{ $email ?? old('email') }}" required autofocus>
+
+                @if ($errors->has('email'))
+                <span class="invalid-feedback" role="alert">
+                  <strong>{{ $errors->first('email') }}</strong>
+                </span>
+                @endif
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <label for="password" class="col-md-4 col-form-label text-md-right">密码</label>
+
+              <div class="col-md-6">
+                <input id="password" type="password" class="form-control{{ $errors->has('password') ? ' is-invalid' : '' }}" name="password" required>
+
+                @if ($errors->has('password'))
+                <span class="invalid-feedback" role="alert">
+                  <strong>{{ $errors->first('password') }}</strong>
+                </span>
+                @endif
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <label for="password-confirm" class="col-md-4 col-form-label text-md-right">确认密码</label>
+
+              <div class="col-md-6">
+                <input id="password-confirm" type="password" class="form-control" name="password_confirmation" required>
+              </div>
+            </div>
+
+            <div class="form-group row mb-0">
+              <div class="col-md-6 offset-md-4">
+                <button type="submit" class="btn btn-primary">
+                  重置密码
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    @endsection
+    ```

@@ -490,7 +490,7 @@
       </div>
     ```
   - 填充假数据 (5步骤)
-    - 1.模型工厂
+    1. 模型工厂
       database/factories/UserFactory.php
       ```
       <?php
@@ -513,11 +513,11 @@
       });
       ```
       define 定义了一个指定数据模型（如此例子 User）的模型工厂
-    - 2.创建填充文件
+    2. 创建填充文件
       ```
       php artisan make:seeder UsersTableSeeder
       ```
-    - 3.编写填充文件（在seeder文件中用`factory()`调用模型工厂）
+    3. 编写填充文件（在seeder文件中用`factory()`调用模型工厂）
       ```
       <?php
 
@@ -539,14 +539,14 @@
       }
       ```
       makeVisible 方法临时显示 User 模型里指定的隐藏属性
-    - 4.在 database/seeds/DatabaseSeeder.php 中调用填充文件
+    4. 在 database/seeds/DatabaseSeeder.php 中调用填充文件
       ```
       public function run()
       {
           $this->call(UsersTableSeeder::class);
       }
       ```
-    - 5.执行填充命令
+    5. 执行填充命令
       ```
       php artisan migrate:refresh
       php artisan db:seed
@@ -559,11 +559,11 @@
       ```
 ### 8.5 删除用户
   - 添加字段 (管理员字段：is_admin）
-    - 1.生成迁移文件，用来添加字段
+    1. 生成迁移文件，用来添加字段
       ```
       php artisan make:migration add_is_admin_to_users_table --table=users
       ```
-    - 2.编写迁移文件
+    2. 编写迁移文件
       ```
       public function up()
       {
@@ -581,11 +581,11 @@
           });
       }
       ```
-    - 3.执行迁移文件 (记得要执行完了新迁移文件后，才能全部回滚 refresh)
+    3. 执行迁移文件 (记得要执行完了新迁移文件后，才能全部回滚 refresh)
       ```
       php artisan migrate
       ```
-    - 4.将第一个用户设置为管理员 database/seeds/UsersTableSeeder.php
+    4. 将第一个用户设置为管理员 database/seeds/UsersTableSeeder.php
       ```
       public function run()
       {
@@ -599,12 +599,12 @@
           $user->save();
       }
       ```
-    - 5.重置数据库 并填充
+    5. 重置数据库 并填充
       ```
       php artisan migrate:refresh --seed
       ```
   - destroy 删除动作
-    - 1.定义「删除」授权策略 app/Policies/UserPolicy.php
+    1. 定义「删除」授权策略 app/Policies/UserPolicy.php
       ```
       public function destroy(User $currentUser, User $user)
       {
@@ -612,8 +612,7 @@
           return $currentUser->is_admin && $currentUser->id !== $user->id;
       }
       ```
-    - 2.模板中用 `@can 和 @endcan`调用「删除策略」：resources/views/users/_user.blade.php
-
+    2. 模板中用 `@can 和 @endcan`调用「删除策略」：resources/views/users/_user.blade.php
       ```
       @can('destroy', $user)
         <form action="{{ route('users.destroy', $user) }}" method="post" class="float-right" onsubmit="return confirm('确定要删除该用户吗？')">
@@ -623,7 +622,7 @@
         </form>
       @endcan
       ```
-    - 3.控制器中用 `authorize()` 调用「删除策略」，并执行删除动作：app/Http/Controllers/UsersController.php
+    3. 控制器中用 `authorize()` 调用「删除策略」，并执行删除动作：app/Http/Controllers/UsersController.php
       ```
       public function destroy(User $user)
       {
@@ -631,5 +630,166 @@
           $user->delete();
           session()->flash('success', '成功删除用户！');
           return back();
+      }
+      ```
+## 9 邮件发送
+### 9.2 账户激活
+  - 9.2.1 添加字段 (activation_token  activated)
+    1. 生成迁移文件 用来添加2个激活字段
+      ```
+      php artisan make:migration add_activation_to_users_table --table=users
+      ```
+    2. 编写迁移文件
+      ```
+      public function up()
+      {
+          Schema::table('users', function (Blueprint $table) {
+              $table->string('activation_token')->nullable();
+              $table->boolean('activated')->default(false);
+          });
+      }
+
+      public function down()
+      {
+          Schema::table('users', function (Blueprint $table) {
+              $table->dropColumn('activation_token');
+              $table->dropColumn('activated');
+          });
+      }
+      ```
+    3. 执行迁移
+      ```
+      php artisan migrate
+      ```
+  - 9.2.2 模型监听 生成激活令牌
+    1. 监听 Model 的 creating 事件，在用户「注册」之前生成用户的激活令牌
+      app/Models/User.php
+      ```
+      public static function boot()
+      {
+          parent::boot();
+
+          static::creating(function ($user) {
+              $user->activation_token = Str::random(10);
+          });
+      }
+      ```
+    2. 在模型工厂中将假用户设为激活 database/factories/UserFactory.php
+      ```
+      $factory->define(User::class, function (Faker $faker) {
+          $date_time = $faker->date . ' ' . $faker->time;
+          return [
+              'name' => $faker->name,
+              'email' => $faker->unique()->safeEmail,
+              'email_verified_at' => now(),
+              'activated' => true,
+              'password' => bcrypt('123456'), // password
+              'remember_token' => Str::random(10),
+              'created_at' => $date_time,
+              'updated_at' => $date_time,
+          ];
+      });
+      ```
+    3. 重置数据库 并填充
+      ```
+      php artisan migrate:refresh --seed
+      ```
+  - 9.2.3 发送邮件
+    1. 在 `.env` 中设置邮件驱动为 log
+      ```
+      MAIL_DRIVER=log
+      ```
+    2. 激活路由 (激活链接) routes/web.php
+      ```
+      Route::get('signup/confirm/{token}', 'UsersController@confirmEmail')->name('confirm_email');
+      ```
+    3. 激活邮件视图 resources/views/emails/confirm.blade.php
+      ```
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>注册确认链接</title>
+      </head>
+      <body>
+        <h1>感谢您在 Weibo App 网站进行注册！</h1>
+
+        <p>
+          请点击下面的链接完成注册：
+          <a href="{{ route('confirm_email', $user->activation_token) }}">
+            {{ route('confirm_email', $user->activation_token) }}
+          </a>
+        </p>
+
+        <p>
+          如果这不是您本人的操作，请忽略此邮件。
+        </p>
+      </body>
+      </html>
+      ```
+    4. 登录时检查是否已激活 app/Http/Controllers/SessionsController.php
+      ```
+      if (Auth::attempt($credentials, $request->has('remember'))) {
+          // 登录成功
+          if (Auth::user()->activated) {
+              // 已激活
+              session()->flash('success', '欢迎回来！');    
+              // 登录后友好转向 intended() 
+              // 重定向到上一次请求尝试访问的页面上，并接收一个默认跳转地址参数，当上一次请求记录为空时，跳转到默认地址上。
+              $default = route('users.show', Auth::user());
+              return redirect()->intended($default);
+          } else {
+              // 未激活
+              Auth::logout();
+              session()->flash('warning', '您的账号未激活，请检查邮箱中的注册邮件进行激活。');
+              return redirect('home');
+          }
+      } else {
+          // 登录失败
+          session()->flash('danger', '很抱歉，您的邮箱和密码不匹配');
+          // 使用 withInput() 后模板里 old('email') 将能获取到上一次用户提交的内容
+          return redirect()->back()->withInput();
+      }
+      ```
+    5. 发送邮件 app/Http/Controllers/UsersController.php
+      ```
+      // 注册
+      public function store(Request $request)
+      {
+          ...
+          // Auth::login($user); // 把之前用户注册成功之后进行的登录操作 换成 以下激活邮箱发送操作
+          $this->sendEmailConfirmationTo($user);
+          session()->flash('success', '验证邮件已发送到你的注册邮箱上，请注意查收。');
+          return redirect()->route('users.show', $user);
+      }
+
+      // 发送激活
+      protected function sendEmailConfirmationTo($user)
+      {
+          $view = 'emails.confirm'; // 邮件用的视图
+          $data = compact('user');  // 视图要的数组数据
+          $from = '123@qq.com';     // 发件人邮箱
+          $name = 'andy';           // 发件人姓名
+          $to = $user->email;       // 收件人邮箱
+          $subject = '邮件标题：感谢注册哟！请完成激活哈！'; // 邮件标题
+
+          Mail::send($view, $data, function($message) use ($from, $name, $to, $subject) {
+              $message->from($from, $name)->to($to)->subject($subject);
+          });
+      }
+
+      // 激活
+      public function confirmEmail($token)
+      {
+          // firstOrFail 方法来取出第一个用户，在查询不到指定用户时将返回一个 404 响应
+          $user = User::where('activation_token', $token)->firstOrFail();
+
+          $user->activated = true;
+          $user->activation_token = null;
+          $user->save();
+
+          Auth::login($user);
+          session()->flash('success', '恭喜你，激活成功');
+          return redirect()->route('users.show', $user);
       }
       ```

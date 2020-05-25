@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Auth;
+use Mail;
 
 class UsersController extends Controller
 {
@@ -12,7 +13,7 @@ class UsersController extends Controller
     {
         // except 黑名单排除不需要登录的，其余都需要登录
         $this->middleware('auth', [
-            'except' => ['show', 'create', 'store', 'index']
+            'except' => ['show', 'create', 'store', 'index', 'confirmEmail']
         ]);
 
         // only 白名单设定注册必须为 游客模式（非登录）
@@ -53,8 +54,9 @@ class UsersController extends Controller
             'password' => bcrypt($request->password),
         ]);
         
-        Auth::login($user);
-        session()->flash('success', '欢迎，您将在这里开启一段新的旅程~');
+        // Auth::login($user); // 把之前用户注册成功之后进行的登录操作 换成 以下激活邮箱发送操作
+        $this->sendEmailConfirmationTo($user);
+        session()->flash('success', '验证邮件已发送到你的注册邮箱上，请注意查收。');
         return redirect()->route('users.show', $user);
     }
 
@@ -91,5 +93,35 @@ class UsersController extends Controller
         $user->delete();
         session()->flash('success', '成功删除用户！');
         return back();
+    }
+
+    // 发送激活
+    protected function sendEmailConfirmationTo($user)
+    {
+        $view = 'emails.confirm'; // 邮件用的视图
+        $data = compact('user');  // 视图要的数组数据
+        $from = '123@qq.com';     // 发件人邮箱
+        $name = 'andy';           // 发件人姓名
+        $to = $user->email;       // 收件人邮箱
+        $subject = '邮件标题：感谢注册哟！请完成激活哈！'; // 邮件标题
+
+        Mail::send($view, $data, function($message) use ($from, $name, $to, $subject) {
+            $message->from($from, $name)->to($to)->subject($subject);
+        });
+    }
+
+    // 激活
+    public function confirmEmail($token)
+    {
+        // firstOrFail 方法来取出第一个用户，在查询不到指定用户时将返回一个 404 响应
+        $user = User::where('activation_token', $token)->firstOrFail();
+
+        $user->activated = true;
+        $user->activation_token = null;
+        $user->save();
+
+        Auth::login($user);
+        session()->flash('success', '恭喜你，激活成功');
+        return redirect()->route('users.show', $user);
     }
 }

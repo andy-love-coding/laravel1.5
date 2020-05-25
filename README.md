@@ -490,7 +490,7 @@
       </div>
     ```
   - 填充假数据 (5步骤)
-    1. 模型工厂
+    - 1.模型工厂
       database/factories/UserFactory.php
       ```
       <?php
@@ -513,11 +513,11 @@
       });
       ```
       define 定义了一个指定数据模型（如此例子 User）的模型工厂
-    2. 创建填充文件
+    - 2.创建填充文件
       ```
       php artisan make:seeder UsersTableSeeder
       ```
-    3. 编写填充文件（在seeder文件中用`factory()`调用模型工厂）
+    - 3.编写填充文件（在seeder文件中用`factory()`调用模型工厂）
       ```
       <?php
 
@@ -539,14 +539,14 @@
       }
       ```
       makeVisible 方法临时显示 User 模型里指定的隐藏属性
-    4. 在 database/seeds/DatabaseSeeder.php 中调用填充文件
+    - 4.在 database/seeds/DatabaseSeeder.php 中调用填充文件
       ```
       public function run()
       {
           $this->call(UsersTableSeeder::class);
       }
       ```
-    5. 执行填充命令
+    - 5.执行填充命令
       ```
       php artisan migrate:refresh
       php artisan db:seed
@@ -912,3 +912,38 @@
     </div>
     @endsection
     ```
+### 9.4 生产环境发送邮件
+  - 1.开启QQ邮箱的SMTP，并复制『授权码』，授权码将作为我们的密码使用
+  - 2.邮箱配置
+    ```
+    MAIL_DRIVER=smtp
+    MAIL_HOST=smtp.qq.com
+    MAIL_PORT=25
+    MAIL_USERNAME=844@qq.com
+    MAIL_PASSWORD=etxknliajakrbced
+    MAIL_ENCRYPTION=tls
+    MAIL_FROM_ADDRESS=844@qq.com
+    MAIL_FROM_NAME=andy
+    ```
+  - 3.在 app/Http/Controllers/UsersController.php 中，邮件发送的 from() 可以去掉了，因为 .env 中已经配置了
+    ```
+    // 发送激活
+    protected function sendEmailConfirmationTo($user)
+    {
+        $view = 'emails.confirm'; // 邮件用的视图
+        $data = compact('user');  // 视图要的数组数据
+        $from = '123@qq.com';     // 发件人邮箱
+        $name = 'andy';           // 发件人姓名
+        $to = $user->email;       // 收件人邮箱
+        $subject = '邮件标题：感谢注册哟！请完成激活哈！'; // 邮件标题
+
+        // Mail::send($view, $data, function($message) use ($from, $name, $to, $subject) {
+        //     $message->from($from, $name)->to($to)->subject($subject);
+        // });
+        
+        // 因为在 .env 中配置了 MAIL_FROM_ADDRESS MAIL_FROM_NAME，因此不再需要使用 from 方法：
+        Mail::send($view, $data, function($message) use ($to, $subject) {
+            $message->to($to)->subject($subject);
+        });
+    }
+    ``` 

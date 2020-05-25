@@ -105,8 +105,13 @@ class UsersController extends Controller
         $to = $user->email;       // 收件人邮箱
         $subject = '邮件标题：感谢注册哟！请完成激活哈！'; // 邮件标题
 
-        Mail::send($view, $data, function($message) use ($from, $name, $to, $subject) {
-            $message->from($from, $name)->to($to)->subject($subject);
+        // Mail::send($view, $data, function($message) use ($from, $name, $to, $subject) {
+        //     $message->from($from, $name)->to($to)->subject($subject);
+        // });
+        
+        // 因为在 .env 中配置了 MAIL_FROM_ADDRESS MAIL_FROM_NAME，因此不再需要使用 from 方法：
+        Mail::send($view, $data, function($message) use ($to, $subject) {
+            $message->to($to)->subject($subject);
         });
     }
 

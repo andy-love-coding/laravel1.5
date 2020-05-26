@@ -1387,3 +1387,152 @@
         ```
         $user->followings()->detach([2,3])
         ```
+### 11.3 社交统计信息
+  - 1.填充「关注」的假数据
+      ```
+      php artisan make:seeder FollowersTableSeeder
+      ```
+      ```
+      public function run()
+      {
+          // 让「第1个用户」和「其他用户」互相关注
+          $users = User::all();
+
+          $user = $users->first();
+          $followers = $users->slice(1);
+
+          $user_id = $user->id;
+          $follower_ids = $followers->pluck('id')->toArray();
+
+          // 1号 关注 其余人
+          $user->follow($follower_ids);
+
+          // 其余人 关注 1号
+          foreach($followers as $follower) {
+              $follower->follow($user_id);
+          }
+      }
+      ```
+      调用填充文件 database/seeds/DatabaseSeeder.php
+
+      ```
+      public function run()
+      {
+
+          $this->call(UsersTableSeeder::class);
+          $this->call(StatusesTableSeeder::class);
+          $this->call(FollowersTableSeeder::class);
+
+      }
+      ```
+      重置并填充
+      ```
+      php artisan migrate:refresh --seed
+      ```
+  - 2.社交统计局部视图 resources/views/shared/_stats.blade.php
+    ```
+    <a href="#">
+      <strong id="following" class="stat">
+        {{ count($user->followings) }}
+      </strong>
+      关注
+    </a>
+    <a href="#">
+      <strong id="followers" class="stat">
+        {{ count($user->followers) }}
+      </strong>
+      粉丝
+    </a>
+    <a href="#">
+      <strong id="statuses" class="stat">
+        {{ $user->statuses()->count() }}
+      </strong>
+      微博
+    </a>
+    ```
+    - 知识点：计数时，尽量在「查询构建器」上`count()` （不过，最好的方式单独一个字段计数，这样就不用count()了）
+      ```
+      $user->statuses->count()   // 数据 70W 条，数据太大，内存溢出（这种是先取出集合数据，再统计，数据太大全部取出时，很耗时且占内存）
+      $user->statuses()->count() // 数据 70W 条，我用这种方式是 0 秒（这种不用取出数据，直接 sql 计数）
+      ```
+  - 3.加载子视图
+    - 主页加载子视图 resources/views/static_pages/home.blade.php
+      ```
+      @if (Auth::check())
+        <div class="row">
+          <div class="col-md-8">
+            <section class="status_form">
+              @include('shared._status_form')
+            </section>
+            <h4>微博列表</h4>
+            <hr>
+            @include('shared._feed')
+          </div>
+          <aside class="col-md-4">
+            <section class="user_info">
+              @include('shared._user_info', ['user' => Auth::user()])
+            </section>
+            <section class="stats mt-2">
+              @include('shared._stats', ['user' => Auth::user()])
+            </section>
+          </aside>
+        </div>
+      @else
+      ```
+    - 个人页面也加载子视图 resources/views/users/show.blade.php
+      ```
+      <div class="row">
+        <div class="offset-md-2 col-md-8">
+          <section class="user_info">
+            @include('shared._user_info', ['user' => $user])
+          </section>
+          <section class="stats mt-2">
+            @include('shared._stats')
+          </section>
+          <hr>
+          <section class="statuses">
+            @if($statuses->count() > 0)
+              <ul class="list-unstyled">
+                @foreach($statuses as $status)
+                  @include('statuses._status')
+                @endforeach
+              </ul>
+              <div class="mt-5">
+                {!! $statuses->render() !!}
+              </div>
+            @else
+              <p>没有数据！</p>
+            @endif
+          </section>
+        </div>
+      </div>
+      ```
+  - 4.css样式 resources/sass/app.scss
+    ```
+    .stats {
+      overflow: auto;
+      margin-top: 0;
+      padding: 0;
+      a {
+        float: left;
+        padding: 0 10px;
+        text-align: center;
+        width: 33%;
+        border-left: 1px solid #eee;
+        color: #33383c;
+        &:first-child {
+          padding-left: 0;
+          border: 0;
+        }
+        &:hover {
+          text-decoration: none;
+          color: #337ab7;
+        }
+      }
+      strong {
+        display: block;
+        font-size: 1.2em;
+        color: black;
+      }
+    }
+    ```

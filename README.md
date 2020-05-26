@@ -490,7 +490,7 @@
       </div>
     ```
   - 填充假数据 (5步骤)
-    - 1.模型工厂
+    - 1.模型工厂 (模型工厂造模型)
       database/factories/UserFactory.php
       ```
       <?php
@@ -946,4 +946,177 @@
             $message->to($to)->subject($subject);
         });
     }
-    ``` 
+    ```
+## 微博CRUD
+### 10.2 微博模型
+  - 1.创建模型的「迁移文件」
+    ```
+    php artisan make:migration create_statuses_table --create="statuses"
+    ```
+  - 2.编写迁移文件（加索引）
+    ```
+    public function up()
+    {
+        Schema::create('statuses', function (Blueprint $table) {
+            $table->bigIncrements('id');
+            $table->text('content'); // 默认 notnull()
+            $table->integer('user_id')->index(); // 因借助 user_id 查询指定用户的微博，加索引提供查询效率
+            $table->index(['created_at']); // 根据创建时间来排序，加索引提高排序效率
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        Schema::dropIfExists('statuses');
+    }
+    ```
+    对应的sql语句
+    ```
+    CREATE TABLE `statuses` (
+      `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+      `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
+      `user_id` int(11) NOT NULL,
+      `created_at` timestamp NULL DEFAULT NULL,
+      `updated_at` timestamp NULL DEFAULT NULL,
+      PRIMARY KEY (`id`),
+      KEY `statuses_created_at_index` (`created_at`),
+      KEY `statuses_user_id_index` (`user_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ```
+  - 3.关联「微博」和「用户」（一对多）
+    - app/Models/Status.php
+      ```
+      // 多对一 多条微博属于一个用户
+      public function user()
+      {
+          return $this->belongsTo(User::class);
+      }
+      ```
+    - app/Models/User.php
+      ```
+      // 一对多 一个用户拥有多条微博
+      public function statuses()
+      {
+          return $this->hasMany(Status::class);
+      }
+      ```
+    - 关联的好处
+      ```
+      // 关联之前创建微博
+      App\Models\Status::create()
+      // 关联之后创建微博
+      $user->statuses()->create()
+      ```
+### 10.3 显示个人微博
+  - 1.在个人页面显示微博 app/Http/Controllers/UsersController.php
+    ```
+    public function show(User $user)
+    {
+        $statuses = $user->statuses()
+                            ->orderBy('created_at', 'desc')
+                            ->paginate(10);
+        return view('users.show', compact('user', 'statuses'));
+    }
+    ```
+  - 2.微博局部视图 resources/views/statuses/_status.blade.php
+    ```
+    <li class="media mt-4 mb-4">
+      <a href="{{ route('users.show', $user->id )}}">
+        <img src="{{ $user->gravatar() }}" alt="{{ $user->name }}" class="mr-3 gravatar"/>
+      </a>
+      <div class="media-body">
+        <h5 class="mt-0 mb-1">{{ $user->name }} <small> / {{ $status->created_at->diffForHumans() }}</small></h5>
+        {{ $status->content }}
+      </div>
+    </li>
+    ```
+    - diffForHumans() 该方法的作用是将日期进行友好化处理。
+  - 3.在 resources/views/users/show.blade.php 引用微博局部视图
+    ```
+    <div class="row">
+      <div class="offset-md-2 col-md-8">
+        <section class="user_info">
+          @include('shared._user_info', ['user' => $user])
+        </section>
+        <section class="status">
+          @if ($statuses->count() > 0)
+            <ul class="list-unstyled">
+              @foreach ($statuses as $status)
+                @include('statuses._status')
+              @endforeach
+            </ul>
+            <div class="mt-5">
+              {!! $statuses->render() !!}
+            </div>
+          @else
+            <p>没有数据！</p>
+          @endif
+        </section>
+      </div>
+    </div>
+    ```
+  - 4.造微博假数据 (4.4 服务容器)
+    - 4.1 生成微博模型的「模型工厂」（模型工厂造模型）
+      ```
+      php artisan make:factory StatusFactory
+      ```
+    - 4.2 编写微博模型的「模型工厂」 database/factories/StatusFactory.php
+      ```
+      <?php
+
+      use Faker\Generator as Faker;
+
+      $factory->define(App\Models\Status::class, function (Faker $faker) {
+          $date_time = $faker->date . ' ' . $faker->time;
+          return [
+              'content'   => $faker->text(),
+              'created_at' => $date_time,
+              'updated_at' => $date_time,
+          ];
+      });
+      ```
+    - 4.3 生成填充文件
+      ```
+      php artisan make:seeder StatusesTableSeeder
+      ```
+    - 4.4 编写填充文件（在填充文件中 调用 「微博模型工厂」来造模型，即填充数据）
+      ```
+      <?php
+
+      use Illuminate\Database\Seeder;
+      use App\Models\User;
+      use App\Models\Status;
+
+      class StatusesTableSeeder extends Seeder
+      {
+          public function run()
+          {
+              $user_ids = ['1','2','3'];
+              // 通过 app() 或者 resolve() 来获取一个 Faker 容器 的实例
+              // $faker = app(Faker\Generator::class);
+              $faker = resolve(Faker\Generator::class);
+
+              $statuses = factory(Status::class)->times(100)->make()->each(function ($status) use ($faker, $user_ids) {
+                  $status->user_id = $faker->randomElement($user_ids);
+              });
+
+              Status::insert($statuses->toArray());
+          }
+      }
+      ```
+      - [服务容器](https://learnku.com/docs/laravel/6.x/container/5131#68be3c)
+        上例中，通过 app() 或者 resolve() 来获取一个 Faker 容器 的实例
+        「服务容器」：就是一个装载和解析服务的容器，服务指的是「类」或「接口」
+        「绑定服务」：就是把服务绑定到容器中，几乎所有的服务容器绑定都会在 [服务提供者](https://learnku.com/docs/laravel/6.x/providers/5132) 中注册
+          ```
+          $this->app->bind('HelpSpot\API', function ($app) {
+              return new HelpSpot\API($app->make('HttpClient'));
+          });
+          ```
+        「解析实例」：就是通过 app() 或 resolve() 等从容器中得到「服务实例」

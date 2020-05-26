@@ -1206,3 +1206,61 @@
     protected $fillable = ['content'];
     ```
 
+### 10.5 首页微博列表
+  - 1.在用户模型中 定义「动态流」方法 app/Models/User.php
+    ```
+    public function feed()
+    {
+        return $this->statuses()
+                    ->orderBy('created_at', 'desc');
+    }
+    ```
+  - 2.控制器中返回「动态流」数据 app/Http/Controllers/StaticPagesController.php
+    ```
+    public function home()
+    {
+        $feed_items = [];
+        if (Auth::check()) {
+            $feed_items = Auth::user()->feed()->paginate(10);
+        }
+
+        return view('static_pages/home', compact('feed_items'));
+    }
+    ```
+  - 3.定义一个「动态流」局部视图 resources/views/shared/_feed.blade.php
+    ```
+    @if ($feed_items->count() > 0)
+      <ul class="list-unstyled">
+        @foreach ($feed_items as $status)
+          @include('statuses._status',  ['user' => $status->user])
+        @endforeach
+      </ul>
+      <div class="mt-5">
+        {!! $feed_items->render() !!}
+      </div>
+    @else
+      <p>没有数据！</p>
+    @endif
+    ```
+  - 4.主页中包含「动态流」局部视图 resources/views/static_pages/home.blade.php
+    ```
+    @if (Auth::check())
+      <div class="row">
+        <div class="col-md-8">
+          <section class="status_form">
+            @include('shared._status_form')
+          </section>
+          <h4>微博列表</h4>
+          <hr>
+          @include('shared._feed')
+        </div>
+        <aside class="col-md-4">
+          <section class="user_info">
+            @include('shared._user_info', ['user' => Auth::user()])
+          </section>
+        </aside>
+      </div>
+    @else
+    ```
+
+

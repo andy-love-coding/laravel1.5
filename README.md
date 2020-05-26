@@ -1305,4 +1305,85 @@
         return redirect()->back();
     }
     ```
+## 11 粉丝关系
+### 11.2 粉丝数据表
+  - 1.生成一个「粉丝关系数据表」(即中间表followers)
+    ```
+    artisan make:migration create_followers_table --create="followers"
+    ```
+    ```
+    public function up()
+    {
+        Schema::create('followers', function (Blueprint $table) {
+            $table->bigIncrements('id');
+            $table->integer('user_id')->index(); // 加索引，获取「粉丝」列表要根据此字段查询
+            $table->integer('follower_id')->index(); // 加索引，获取「关注人」列表要根据此字段查询
+            $table->timestamps();
+        });
+    }
+    ```
+  - 2.执行迁移文件 (生成中间表)
+      ```
+      php artisan migrate
+      ```
+  - 3.关联博主和粉丝 (多对多) app/Models/User.php
+    ```
+    // 多对多关联语法：$this-> belongsToMany(关联表model，中间表表名，中间表中本model的关联ID，中间表中关联model的关联ID);
+    // 本 model 为博主 （博主的粉丝列表）
+    public function followers()
+    {
+        return $this->belongsToMany(User::class, 'followers', 'user_id', 'follower_id');
+    }
 
+    // 本 model 为粉丝 （粉丝的博主列表）
+    public function followings()
+    {
+        return $this->belongsToMany(User::class, 'followers', 'follower_id', 'user_id');
+    }
+
+    // 关注 (所谓关注，即把粉丝的ids 加到 博主列表 中去)
+    public function follow($user_ids)
+    {
+        if ( !is_array($user_ids) ) {
+            $user_ids = compact('user_ids');
+        }
+        $this->followings()->sync($user_ids, false); // false 参数表示添加关注人id数组时，不删除其他关注人id
+    }
+
+    // 取关 (所谓取关，即把粉丝的ids 从 博主列表 中减去)
+    public function unfollow($user_ids)
+    {
+        if ( !is_array($user_ids) ) {
+            $user_ids = compact('user_ids');
+        }
+        $this->followings()->detach($user_ids);
+    }
+
+    // 是否关注
+    public function isFollowing($user_id)
+    {
+        // $this->followings 返回的是：粉丝关注的博主列表的集合
+        // $this->followings() 返回的是：数据库请求构建器（也就是数据库查询语句）
+        // $this->followings == $this->followings()->get() // 等于 true
+        // contains 方法是 Collection集合 的一个方法
+        return $this->followings->contains($user_id);
+    }
+    ```
+    - 「多对多」关联语法
+      ```
+      $this-> belongsToMany(关联表model，中间表表名，中间表中本model的关联ID，中间表中关联model的关联ID);
+      ```
+    - 「多对多」[关联动作](https://learnku.com/courses/laravel-essential-training/6.x/fan-data-table/5501#065818)
+      - 「关注」这个动作，就是在「某粉丝id」的「博主列表」中做加法，用 `attach()` 和 `sync()` 方法
+        ```
+        // attach() 添加 id 时不会去重，比如多次执行时，可能会重复添加id为"2"的记录
+        $user->followings()->attach([2, 3])
+        
+        // sync() 添加 id 时会去重，不会重复添加同一个id
+        // sync() 的第二个参数表示添加关注人(博主)id数组时，「是否」删除其他关注人id，false 表示「否」
+        $user->followings()->sync([3], false)
+        ```
+      - 「取关」这个动作，就是在「某粉丝id」的「博主列表」中做减法，用 `detach()` 方法
+        ```
+        $user->followings()->detach([2,3])
+        ```

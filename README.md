@@ -1262,5 +1262,47 @@
       </div>
     @else
     ```
+### 10.6 删除微博
+  - 1.删除的授权策略
+    ```
+    php artisan make:policy StatusPolicy
+    ```
+    ```
+    // 只有自己才能删除自己的微博
+    public function destroy(User $currentUser, Status $status)
+    {
+        return $currentUser->id === $status->user_id;
+    }
+    ```
+  - 2.视图中的删除按钮 resources/views/statuses/_status.blade.php
+    ```
+    <li class="media mt-4 mb-4">
+      <a href="{{ route('users.show', $user->id) }}">
+        <img src="{{ $user->gravatar() }}" alt="{{ $user->name }}" class="mr-3 gravatar">
+      </a>
+      <div class="media-body">
+        <h5 class="mt-0 mb-1">{{ $user->name }} <small> / {{ $status->created_at->diffForHumans() }}</small></h5>
+        {{ $status->content }}
+      </div>
 
+      
+      @can('destroy', $status)
+        <form action="{{ route('statuses.destroy', $status->id) }}" method="POST" onsubmit="return confirm('您确定要删除此条微博吗？');">
+          {{ csrf_field() }}
+          {{ method_field('DELETE') }}
+          <button type="submit" class="btn btn-sm btn-danger">删除</button>
+        </form>
+      @endcan
+    </li>
+    ```
+  - 3.控制器中删除动作 app/Http/Controllers/StatusesController.php
+    ```
+    public function destroy(Status $status)
+    {
+        $this->authorize('destroy', $status);
+        $status->delete();
+        session()->flash('success', '微博已被成功删除！');
+        return redirect()->back();
+    }
+    ```
 

@@ -1124,7 +1124,6 @@
             });
             ```
         - 「解析实例」：就是通过 app() 或 resolve() 等从容器中得到「服务实例」
-
 ### 10.4 发布微博
   - 1.路由 resource(,,['only'=>[]])
     ```
@@ -1205,7 +1204,6 @@
     // 允许更新微博的 content 字段
     protected $fillable = ['content'];
     ```
-
 ### 10.5 首页微博列表
   - 1.在用户模型中 定义「动态流」方法 app/Models/User.php
     ```
@@ -1535,4 +1533,74 @@
         color: black;
       }
     }
+    ```
+### 11.4 粉丝页面
+  - 1.路由 routes/web.php
+    ```
+    Route::get('users/{user}/followings', 'UsersController@followings')->name('users.followings'); // 博主列表
+    Route::get('users/{user}/followers', 'UsersController@followers')->name('users.followers'); // 粉丝列表
+    ```
+  - 2.入口链接 resources/views/shared/_stats.blade.php
+    ```
+    <a href="{{ route('users.followings', $user->id) }}">
+      <strong id="following" class="stat">
+        {{ count($user->followings) }}
+      </strong>
+      关注
+    </a>
+    <a href="{{ route('users.followers', $user->id) }}">
+      <strong id="followers" class="stat">
+        {{ $user->followers->count() }}
+      </strong>
+      粉丝
+    </a>
+    <a href="{{ route('users.show', $user->id) }}">
+      <strong id="statuses" class="stat">
+        {{ $user->statuses()->count() }}
+      </strong>
+      微博
+    </a>
+    ```
+  - 3.控制器 app/Http/Controllers/UsersController.php
+    ```
+    public function followings(User $user)
+    {
+        $users = $user->followings()->paginate(10);
+        $title = $user->name . '关注的人';
+        return view('users.show_follow', compact('users', 'title'));
+    }
+
+    public function followers(User $user)
+    {
+        $users = $user->followers()->paginate(10);
+        $title = $user->name . '的粉丝';
+        return view('users.show_follow', compact('users', 'title'));
+    }
+    ```
+  - 4.视图（博主列表和粉丝列表共用一个视图）
+    ```
+    @extends('layouts.default')
+    @section('title', $title)
+
+    @section('content')
+    <div class="offset-md-2 col-md-8">
+      <h2 class="mb-4 text-center">{{ $title }}</h2>
+
+      <div class="list-group list-group-flush">
+        @foreach ($users as $user)
+          <div class="list-group-item">
+            <img class="mr-3" src="{{ $user->gravatar() }}" alt="{{ $user->name }}" width=32>
+            <a href="{{ route('users.show', $user) }}">
+              {{ $user->name }}
+            </a>
+          </div>
+
+        @endforeach
+      </div>
+
+      <div class="mt-3">
+        {!! $users->render() !!}
+      </div>
+    </div>
+    @stop
     ```

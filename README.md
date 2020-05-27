@@ -1604,3 +1604,84 @@
     </div>
     @stop
     ```
+### 关注按钮
+  - 1.路由
+    ```
+    Route::post('/users/followers/{user}', 'FollowersController@store')->name('followers.store');
+    Route::delete('/users/followers/{user}', 'FollowersController@destroy')->name('followers.destroy');
+    ```
+  - 2.授权策略 app/Policies/UserPolicy.php
+    ```
+    public function follow(User $currentUser, User $user)
+    {
+        // 自己不能关注自己
+        return $currentUser->id !== $user->id;
+    }
+    ```
+  - 3.关注表单的局部视图 resources/views/users/_follow_form.blade.php
+    ```
+    @can('follow', $user)
+      <div class="text-center mt-2 mb-4">
+        @if (Auth::user()->isFollowing($user->id))
+          <form action="{{ route('followers.destroy', $user->id) }}" method="post">
+            {{ csrf_field() }}
+            {{ method_field('DELETE') }}
+            <button type="submit" class="btn btn-sm btn-outline-primary">取消关注</button>
+          </form>
+        @else
+          <form action="{{ route('followers.store', $user->id) }}" method="post">
+            {{ csrf_field() }}
+            <button type="submit" class="btn btn-sm btn-primary">关注</button>
+          </form>
+        @endif
+      </div>
+    @endcan
+    ```
+  - 4.个人页面 添加「关注表单」子视图 resources/views/users/show.blade.php
+    ```
+    <section class="user_info">
+      @include('shared._user_info', ['user' => $user])
+    </section>
+
+    @if (Auth::check())
+      @include('users._follow_form')
+    @endif
+
+    <section class="stats mt-2">
+      @include('shared._stats', ['user' => $user])
+    </section>
+    <hr>
+    ```
+  - 5.控制器 app/Http/Controllers/FollowersController.php
+    ```
+    php artisan make:controller FollowersController
+    ```
+    ```
+      public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    public function store(User $user)
+    {
+        $this->authorize('follow', $user);
+
+        if ( ! Auth::user()->isFollowing($user->id)) {
+            Auth::user()->follow($user->id);
+        }
+
+        // return redirect()->route('users.show', $user->id);
+        return back();
+    }
+
+    public function destroy(User $user)
+    {
+        $this->authorize('follow', $user);
+
+        if ( Auth::user()->isFollowing($user->id)) {
+            Auth::user()->unfollow($user->id);
+        }
+
+        return redirect()->route('users.show', $user->id);
+    }
+    ```
